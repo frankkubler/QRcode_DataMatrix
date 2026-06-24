@@ -1,4 +1,4 @@
 numpy==1.26.4
-opencv-python==4.9.0.80
+opencv-python
 zxing-cpp==2.2.0
 #tested on python 3.11.6
