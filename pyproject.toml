@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "numpy==1.26.4",
+    "numpy>=2.0.0",
     "opencv-python>=4.11.0.86",
-    "zxing-cpp==2.2.0",
+    "zxing-cpp>=3.0.0",
 ]
