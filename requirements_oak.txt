@@ -1,0 +1,5 @@
+# Dépendances pour le pipeline OAK/DepthAI
+depthai>=3.0
+zxingcpp
+opencv-python
+numpy
