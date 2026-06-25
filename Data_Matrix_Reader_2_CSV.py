@@ -41,10 +41,8 @@ class PrintThread(threading.Thread):  # manipulation du résultat du scan
             now = datetime.now()
             timeRN = now.strftime("%H:%M:%S")
 
-            my_mutex.acquire()
-            # with my_mutex: # my_mutex is release so I can write in the variables and make a copy
-            to_publish_data = data
-            my_mutex.release()
+            with my_mutex:
+                to_publish_data = data
             if to_publish_data and previous_data != to_publish_data:
                 print(f"cool new data found : {to_publish_data} , {date}, {timeRN}")
                 previous_data = to_publish_data
@@ -119,10 +117,9 @@ class QrDecode(threading.Thread):
                     # extract the bounding box location of the barcode and draw
                     # the bounding box surrounding the barcode on the image
 
-                    # mutex writting result  
-                    my_mutex.acquire()
-                    data = result.text
-                    my_mutex.release()
+                    # mutex writing result
+                    with my_mutex:
+                        data = result.text
 
                     position_list_str = str(result.position)  # zxingcpp object to string
                     position_list = position_list_str.split(' ')  # split space
