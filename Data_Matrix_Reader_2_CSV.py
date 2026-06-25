@@ -6,8 +6,10 @@
 
 import cv2
 import csv
+import glob
 import numpy as np
 import threading
+from pathlib import Path
 
 import zxingcpp  # pip install zxing-cpp (mini python 3.8)
 from sys import platform
@@ -17,6 +19,69 @@ import sys
 my_mutex = threading.Lock()
 data = None
 keep_going = True
+
+
+class CameraSelector:
+    @staticmethod
+    def open_device(source, dshow=False):
+        if dshow:
+            cap_candidate = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        else:
+            cap_candidate = cv2.VideoCapture(source)
+        if not cap_candidate.isOpened():
+            cap_candidate.release()
+            return None, False, None
+        ret, img_candidate = cap_candidate.read()
+        if not ret:
+            cap_candidate.release()
+            return None, False, None
+        return cap_candidate, True, img_candidate
+
+    @staticmethod
+    def by_path_candidates():
+        by_path_dir = Path('/dev/v4l/by-path')
+        if not by_path_dir.exists():
+            return []
+        candidates = []
+        for symlink in sorted(by_path_dir.iterdir()):
+            try:
+                target = symlink.resolve()
+            except OSError:
+                continue
+            if target.exists() and target.name.startswith('video'):
+                candidates.append((symlink.name.lower(), str(target)))
+        return candidates
+
+    @classmethod
+    def open_preferred(cls, platform_name):
+        if platform_name == 'linux' or platform_name == 'linux2':
+            candidates = []
+            by_path = cls.by_path_candidates()
+            if by_path:
+                usb_candidates = [target for name, target in by_path if 'usb' in name and 'platform' not in name]
+                other_candidates = [target for name, target in by_path if target not in usb_candidates]
+                candidates = usb_candidates + other_candidates
+            if not candidates:
+                candidates = sorted(glob.glob('/dev/video*'), key=lambda p: int(Path(p).name.replace('video', '')), reverse=True)
+
+            for dev in candidates:
+                cap, ret, img = cls.open_device(dev, dshow=False)
+                if ret:
+                    return cap, dev, ret, img
+            return None, None, False, None
+
+        if platform_name == 'win32':
+            for idx in [0, 1, 2]:
+                cap, ret, img = cls.open_device(idx, dshow=True)
+                if ret:
+                    return cap, idx, ret, img
+            return None, None, False, None
+
+        for idx in [0, 1, 2]:
+            cap, ret, img = cls.open_device(idx, dshow=False)
+            if ret:
+                return cap, idx, ret, img
+        return None, None, False, None
 
 
 class PrintThread(threading.Thread):  # manipulation du résultat du scan
@@ -69,41 +134,12 @@ class QrDecode(threading.Thread):
         global keep_going
         global my_mutex
 
-        # set up camera object called Cap which we will use to find OpenCV
-        # check where the camera is connected(external webcam priority (2 to 0 )) and linux or windows (direct show needed for windows)
-        if platform == "linux" or platform == "linux2":
+        # set up camera object called Cap which we will use with OpenCV
+        cap, port, ret, img = CameraSelector.open_preferred(platform)
+        if not ret or cap is None:
+            sys.exit('there is no camera connected')
 
-            cap = cv2.VideoCapture(0)
-            ret, img = cap.read()
-            port = 0
-            if not ret:
-                cap = cv2.VideoCapture(1)
-                ret, img = cap.read()
-                port = 1
-                if not ret:
-                    cap = cv2.VideoCapture(2)
-                    ret, img = cap.read()
-                    port = 2
-                    if not ret:
-                        sys.exit('there is no camera connected')
-            print('camera port is : ', port)
-
-        elif platform == "win32":  # for PC
-            cap = cv2.VideoCapture(2, cv2.CAP_DSHOW)
-            ret, img = cap.read()
-            port = 2
-            if not ret:
-                cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-                ret, img = cap.read()
-                port = 1
-                if not ret:
-                    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-                    ret, img = cap.read()
-                    port = 0
-                    if not ret:
-                        sys.exit('there is no camera connected')
-
-                print('camera port is : ', port)
+        print('camera port is : ', port)
 
         # This creates an Infinite loop to keep your camera searching for data at all times
         while keep_going:
